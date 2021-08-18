@@ -1,0 +1,17 @@
+/.idea/*
+generic-ner-ui/staticfiles
+*/.mypy_cache
+*/.pytest_cache
+*/generic_ner_ui.egg-info
+**/__pycache__
+**main/__pycache__/
+**/migrations
+generic-ner-ui/BOW_UI_headless
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

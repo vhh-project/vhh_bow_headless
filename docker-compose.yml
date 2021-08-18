@@ -1,0 +1,126 @@
+version: "3.7"
+
+
+services:
+  database:
+    image: mysql:5.7
+    volumes:
+      - ./database/custom.cnf:/etc/mysql/conf.d/custom.cnf
+      - nerdbdata:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=GEN_NER_UI
+      - MYSQL_USER=root
+      - MYSQL_ROOT_PASSWORD=root
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    ports:
+      - "3308:3306"
+    command: --max_allowed_packet=1073741824
+  rabbitmq:
+    image: rabbitmq:3.7.24-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=amqp_user
+      - RABBITMQ_DEFAULT_PASS=amqp_pass
+      - RABBITMQ_DEFAULT_VHOST=nerui
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Expose management ui
+  minio:
+    image: minio/minio:RELEASE.2020-09-08T23-05-18Z
+    volumes:
+      - miniodata:/storage
+    environment:
+      - MINIO_ACCESS_KEY=abcdACCESS
+      - MINIO_SECRET_KEY=abcdSECRET
+    ports:
+      - "9000:9000"
+    command: ["minio", "server", "/storage/data"]
+  ocr-pipeline:
+    image: ocr_pipeline
+    build: ./ocr-pipeline/
+    environment:
+      - CONFIG_AMQP_URL=amqp://amqp_user:amqp_pass@rabbitmq:5672/nerui?heartbeat=30
+      - CONFIG_AMQP_INQUEUE=ocr_pipeline
+      - CONFIG_MINIO_HOST=minio
+      - LOGURU_LEVEL=INFO
+      - PYTORCH_PRETRAINED_BERT_CACHE=/transformers_cache
+    volumes:
+      - transformers_cache:/transformers_cache
+  generic-ner-ui:
+    image: generic-ner-ui
+    build:
+      context: ./generic-ner-ui/
+      args:
+        - SCRIPT_NAME=/bow
+    environment:
+      - LOGURU_LEVEL=DEBUG
+      - CONFIG_AMQP_URL=amqp://amqp_user:amqp_pass@rabbitmq:5672/nerui?heartbeat=30
+      - CONFIG_DATABASE_HOST=database
+      - CONFIG_DATABASE_PORT=3306
+      - CONFIG_DATABASE_USER=root
+      - CONFIG_DATABASE_PASSWORD=root
+      - CONFIG_DATABASE_SCHEMA=GEN_NER_UI
+      - CONFIG_IMAGE_WIDTH=1024
+      - CONFIG_IMAGE_HEIGHT=768
+      - CONFIG_MINIO_HOST=minio
+      - CONFIG_MINIO_PORT=9000
+      - CONFIG_MINIO_KEY=abcdACCESS
+      - CONFIG_MINIO_SECRET=abcdSECRET
+      - CONFIG_MINIO_UPLOAD_BUCKET=upload-bucket
+      - CONFIG_PIPELINES_COUNT=1
+      - CONFIG_PIPELINES_RETURN_LAST=True
+      - CONFIG_PIPELINES_P0_QUEUE_NAME=ocr_pipeline
+      - CONFIG_PIPELINES_P0_NAME=ocr_pipeline
+      - CONFIG_PIPELINES_P0_DEPENDS_ON=
+      - CONFIG_PIPELINES_P0_RETURN_PAGES=True
+      - DEBUG=False
+    depends_on:
+      - database
+    init: true
+    volumes:
+      - migrations:/app/generic-ner-ui/generic_ner_ui/migrations
+    ports:
+      - "8000:8000"
+  generic-ner-ui_headless:
+    image: generic-ner-ui_headless
+    build:
+      context: ./Generic-Ner-UI_headless/
+      args:
+        - SCRIPT_NAME=/bow
+    environment:
+      - LOGURU_LEVEL=DEBUG
+      - CONFIG_AMQP_URL=amqp://amqp_user:amqp_pass@rabbitmq:5672/nerui?heartbeat=30
+      - CONFIG_DATABASE_HOST=database
+      - CONFIG_DATABASE_PORT=3306
+      - CONFIG_DATABASE_USER=root
+      - CONFIG_DATABASE_PASSWORD=root
+      - CONFIG_DATABASE_SCHEMA=GEN_NER_UI
+      - CONFIG_IMAGE_WIDTH=1024
+      - CONFIG_IMAGE_HEIGHT=768
+      - CONFIG_MINIO_HOST=minio
+      - CONFIG_MINIO_PORT=9000
+      - CONFIG_MINIO_KEY=abcdACCESS
+      - CONFIG_MINIO_SECRET=abcdSECRET
+      - CONFIG_MINIO_UPLOAD_BUCKET=upload-bucket
+      - CONFIG_PIPELINES_COUNT=1
+      - CONFIG_PIPELINES_RETURN_LAST=True
+      - CONFIG_PIPELINES_P0_QUEUE_NAME=ocr_pipeline
+      - CONFIG_PIPELINES_P0_NAME=ocr_pipeline
+      - CONFIG_PIPELINES_P0_DEPENDS_ON=
+      - CONFIG_PIPELINES_P0_RETURN_PAGES=True
+      - DEBUG=False
+    depends_on:
+      - database
+    init: true
+    volumes:
+      - migrations:/app/generic-ner-ui/generic_ner_ui/migrations
+    ports:
+      - "8000:8000"
+volumes:
+  dbdata:
+  miniodata:
+  nerdbdata:
+  migrations:
+  transformers_cache:
